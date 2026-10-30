@@ -1,0 +1,12 @@
+{
+  "name": "nghe-giang-chrome-extension",
+  "version": "1.0.0",
+  "description": "Chrome Extension nhận dạng bài giảng tiếng Anh từ micro và dịch hiển thị phụ đề tiếng Việt trực tiếp.",
+  "type": "module",
+  "scripts": {
+    "test": "node test_extension.js"
+  },
+  "author": "Nghe Giang Team",
+  "license": "MIT"
+}
+

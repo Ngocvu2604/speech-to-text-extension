@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nghe Giảng - Phụ đề & Dịch trực tiếp</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+
+<body class="font-medium">
+
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+          <path
+            d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+        </svg>
+      </div>
+      <span class="app-title">Nghe Giảng</span>
+    </div>
+
+    <div class="header-right">
+
+      <label class="switch-control" title="Thu gọn / Mở rộng giao diện">
+        <input type="checkbox" id="switchAppPower" checked>
+        <span class="switch-slider"></span>
+      </label>
+
+      <!-- Nút chuyển giao diện Sáng / Tối -->
+      <button id="btnThemeToggle" class="header-icon-btn" title="Chuyển sang Giao diện Tối" aria-label="Giao diện Tối">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+
+      <button id="btnThemeToggle" class="header-icon-btn" title="Chuyển sang Giao diện Tối" aria-label="Giao diện Tối">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+
+      <button id="btnHeaderSettings" class="header-icon-btn" title="Cài đặt & Thông tin" aria-label="Cài đặt">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+          </path>
+        </svg>
+      </button>
+
+      <button id="btnHeaderPopout" class="header-icon-btn" title="Mở cửa sổ rời" aria-label="Cửa sổ rời">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <nav class="nav-tabs-bar">
+    <div class="tabs-group">
+      <button class="nav-tab active" id="tabSubtitles">PHỤ ĐỀ TRỰC TIẾP</button>
+      <button class="nav-tab" id="tabSettings">CÀI ĐẶT & THÔNG TIN</button>
+    </div>
+  </nav>
+
+  <div class="tab-pane active" id="paneSubtitles">
+
+    <section class="control-box">
+
+      <button id="btnToggleListening" class="primary-btn btn-purple">
+        <svg class="btn-mic-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+          <path
+            d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+        </svg>
+        <span class="btn-text">Bắt đầu nghe</span>
+      </button>
+
+      <div class="vu-meter" title="Mức âm thanh thu từ micro">
+        <div class="vu-bar" id="vuBar"></div>
+      </div>
+
+      <div class="permission-banner hidden" id="permissionBanner">
+        <div class="banner-content">
+          <span class="banner-icon">⚠️</span>
+          <span class="banner-text">Cần cấp quyền micro cho tiện ích để bắt đầu nghe.</span>
+        </div>
+        <button id="btnRequestPermission" class="btn-banner-action">Cấp quyền Micro</button>
+      </div>
+
+      <div class="network-notice-banner hidden" id="networkNoticeBanner">
+        <div class="banner-content">
+          <span class="banner-icon">🌐</span>
+          <div class="banner-text-group">
+            <strong id="networkNoticeTitle">Thông báo nhận dạng giọng nói</strong>
+            <span id="networkNoticeDesc">Dịch vụ nhận dạng giọng nói cần kết nối internet.</span>
+            <div id="networkNoticeActions" class="banner-actions-row hidden" style="margin-top: 4px;">
+              <button id="btnSwitchToGeminiSTT" class="btn-banner-action">Dùng Gemini Audio (Hỗ trợ Brave)</button>
+              <button id="btnRetryWebSpeech" class="btn-banner-outline">Thử lại</button>
+            </div>
+          </div>
+        </div>
+        <button id="btnDismissNetworkNotice" class="btn-banner-close" title="Đóng">✕</button>
+      </div>
+
+      <div class="options-row">
+        <div class="device-select-box" title="Chọn thiết bị micro">
+          <svg class="mic-glyph" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+            <path
+              d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+          </svg>
+          <select id="selectMicDevice" class="device-select">
+            <option value="">Micro mặc định</option>
+          </select>
+        </div>
+
+        <label class="toggle-en-box" title="Hiển thị tiếng Anh gốc kèm theo bản dịch tiếng Việt">
+          <input type="checkbox" id="checkShowEnglish">
+          <span>Hiện tiếng Anh</span>
+        </label>
+
+        <div class="font-size-group" title="Cỡ chữ">
+          <button id="btnFontDec" class="font-btn" title="Giảm cỡ chữ">A-</button>
+          <button id="btnFontInc" class="font-btn" title="Tăng cỡ chữ">A+</button>
+        </div>
+      </div>
+    </section>
+
+    <main class="subtitles-viewport" id="subtitlesViewport">
+
+      <div class="skipped-toast hidden" id="skippedToast">
+        <span>Đã bỏ qua đoạn không phải tiếng Anh</span>
+      </div>
+
+      <div class="empty-state" id="emptyState">
+        <div class="empty-glyph">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </div>
+        <div class="empty-text">Chưa có phụ đề</div>
+      </div>
+
+      <div class="continuous-transcript" id="continuousTranscript"></div>
+
+      <div class="live-speaking-indicator hidden" id="liveSpeakingIndicator">
+        <span class="live-dot"></span>
+        <span class="live-label">Đang nghe:</span>
+        <span class="live-text" id="liveSpeakingText"></span>
+        <span class="queue-status-badge hidden" id="queueStatusBadge"></span>
+      </div>
+    </main>
+
+    <button id="btnScrollToLatest" class="scroll-to-latest-btn hidden" title="Tới nội dung mới nhất">
+      <span>Tới nội dung mới nhất</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
+
+    <footer class="bottom-action-bar" id="bottomActionBar">
+      <button id="btnCopyAll" class="bottom-action-btn" title="Sao chép toàn bộ văn bản dịch" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>Sao chép</span>
+      </button>
+
+      <button id="btnExport" class="bottom-action-btn" title="Xuất toàn bộ phụ đề ra file (.txt)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>Xuất file</span>
+      </button>
+
+      <button id="btnClear" class="bottom-action-btn btn-clear-danger" title="Xóa toàn bộ phụ đề phiên này" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+        <span>Xóa</span>
+      </button>
+    </footer>
+  </div>
+
+  <div class="tab-pane hidden" id="paneSettings">
+    <div class="settings-container">
+      <div class="form-section">
+        <label class="form-label" for="selectSpeechEngine">Nhận dạng giọng nói (STT):</label>
+        <select id="selectSpeechEngine" class="form-control">
+          <option value="web-speech">Web Speech API (Chrome, Edge)</option>
+          <option value="gemini-stt">Google Gemini Audio (Brave & đa trình duyệt)</option>
+        </select>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label" for="selectEngine">Công cụ dịch thuật:</label>
+        <select id="selectEngine" class="form-control">
+          <option value="google-gtx">Google Translate (Mặc định)</option>
+          <option value="gemini">Google Gemini AI</option>
+          <option value="mymemory">MyMemory</option>
+          <option value="local-ai">Trình duyệt Cục bộ (Local AI)</option>
+        </select>
+      </div>
+
+      <div class="form-section hidden" id="geminiKeyWrapper">
+        <label class="form-label" for="inputGeminiKey">Gemini API Key:</label>
+        <div class="key-control-group">
+          <input type="password" id="inputGeminiKey" class="form-control" placeholder="Dán API Key (AIzaSy...)">
+          <div class="key-actions-row">
+            <button type="button" id="btnTestGeminiKey" class="btn-sub-action">Kiểm tra kết nối</button>
+            <button type="button" id="btnClearGeminiKey" class="btn-sub-action btn-danger-action">Xóa Key</button>
+          </div>
+        </div>
+        <div id="geminiKeyStatus" class="key-status-msg hidden"></div>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label" for="selectDialect">Phương ngữ bài giảng:</label>
+        <select id="selectDialect" class="form-control">
+          <option value="en-US">Tiếng Anh - Mỹ (en-US)</option>
+          <option value="en-GB">Tiếng Anh - Anh (en-GB)</option>
+          <option value="en-AU">Tiếng Anh - Úc (en-AU)</option>
+        </select>
+      </div>
+
+      <div class="form-section">
+        <label class="checkbox-container">
+          <input type="checkbox" id="checkSaveHistory">
+          <span>Lưu lịch sử phụ đề sau khi đóng phiên</span>
+        </label>
+      </div>
+
+      <div class="privacy-box">
+        <div class="privacy-box-title">MINH BẠCH DỮ LIỆU & QUYỀN RIÊNG TƯ</div>
+        <ul class="privacy-box-list">
+          <li><strong>Âm thanh micro:</strong> Xử lý trực tiếp trong RAM, không ghi âm, không lưu file âm thanh trên
+            đĩa.</li>
+          <li><strong>Bản dịch:</strong> Chỉ gửi câu chữ tiếng Anh cần dịch đến máy chủ bạn đã chọn (Google AI Studio
+            hoặc Google GTX). Không gửi tới bất kỳ máy chủ trung gian nào.</li>
+          <li><strong>API Key:</strong> Lưu cục bộ trên máy của bạn (<code>chrome.storage.local</code>). Lưu ý mã nguồn
+            extension phía người dùng có thể được kiểm tra trong môi trường trình duyệt.</li>
+        </ul>
+      </div>
+
+      <button id="btnSaveConfig" class="primary-btn btn-purple" style="margin-top: 6px;">Lưu Cài Đặt</button>
+
+      <div class="settings-credit">
+        <span><strong>.ngocvu2604</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+
+</html>

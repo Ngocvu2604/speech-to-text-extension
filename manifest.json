@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Nghe Giảng - Phụ đề & Dịch bài giảng thời gian thực",
+  "short_name": "Nghe Giảng",
+  "version": "1.0.0",
+  "description": "Nhận dạng bài giảng tiếng Anh từ micro và hiển thị phụ đề dịch tiếng Việt gần như theo thời gian thực.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "sidePanel",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://translate.googleapis.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.mymemory.translated.net/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Mở Nghe Giảng (Phụ đề & Dịch)"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}
+
