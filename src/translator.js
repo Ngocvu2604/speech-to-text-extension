@@ -18,7 +18,7 @@ function setCache(key, value) {
   translationCache.set(normalized, value);
 }
 
-async function translateWithGoogleGTX(text, timeoutMs = 7000, signal = null) {
+async function translateWithGoogleGTX(text, timeoutMs = 5000, signal = null) {
   const cleanText = text.trim();
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(cleanText)
 }`;
@@ -78,7 +78,7 @@ const GEMINI_MODELS = [
 
 let cachedWorkingModel = null;
 
-async function translateWithGemini(text, apiKey, context = '', timeoutMs = 9000, signal = null) {
+async function translateWithGemini(text, apiKey, context = '', timeoutMs = 6000, signal = null) {
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
     throw new Error('Chưa cấu hình Gemini API Key. Vui lòng vào Cài đặt để nhập Key miễn phí từ Google AI Studio.');
   }
@@ -90,16 +90,19 @@ async function translateWithGemini(text, apiKey, context = '', timeoutMs = 9000,
 
   let promptInstruction = '';
   if (context && context.trim()) {
-    promptInstruction = `Bạn là trợ lý dịch bài giảng học thuật tiếng Anh sang tiếng Việt thời gian thực.
-Ngữ cảnh lời giảng vừa nói trước đó: "${context.trim()
-}"
-Câu mới cần dịch: "${text
-}"
-Yêu cầu: Dịch câu mới sang tiếng Việt chuẩn xác theo ngữ cảnh trên, giữ đúng đại từ, thuật ngữ chuyên ngành và tính liên kết ý.
-CHỈ trả về duy nhất bản dịch tiếng Việt của câu mới, không kèm giải thích, không lặp lại câu trước, không dùng ngoặc kép.`;
+    promptInstruction = `Bạn là hệ thống dịch phụ đề bài giảng thời gian thực từ tiếng Anh sang tiếng Việt.
+[NGỮ CẢNH VỪA NÓI TRƯỚC ĐÓ - CHỈ DÙNG THAM KHẢO, TUYỆT ĐỐI KHÔNG DỊCH]:
+"${context.trim()}"
+
+[CÂU MỚI DUY NHẤT CẦN DỊCH]:
+"${text.trim()}"
+
+QUY TẮC BẮT BUỘC:
+1. CHỈ dịch phần [CÂU MỚI DUY NHẤT CẦN DỊCH].
+2. TUYỆT ĐỐI KHÔNG dịch hay lặp lại bất kỳ nội dung nào thuộc [NGỮ CẢNH VỪA NÓI TRƯỚC ĐÓ].
+3. CHỈ trả về duy nhất bản dịch tiếng Việt của câu mới, không thêm giải thích hay ngoặc kép.`;
   } else {
-    promptInstruction = `Bạn là trợ lý dịch phụ đề bài giảng học thuật thời gian thực từ tiếng Anh sang tiếng Việt. Hãy dịch đoạn văn bản sau sang tiếng Việt một cách tự nhiên, chuẩn xác theo văn phong sư phạm/học thuật, ngắn gọn và rõ nghĩa. CHỈ trả về duy nhất bản dịch tiếng Việt, không kèm giải thích hay ngoặc kép.\n\n"${text
-}"`;
+    promptInstruction = `Bạn là trợ lý dịch phụ đề bài giảng học thuật thời gian thực từ tiếng Anh sang tiếng Việt. Hãy dịch đoạn văn bản sau sang tiếng Việt một cách tự nhiên, chuẩn xác theo văn phong sư phạm/học thuật, ngắn gọn và rõ nghĩa. CHỈ trả về duy nhất bản dịch tiếng Việt, không kèm giải thích hay ngoặc kép.\n\n"${text.trim()}"`;
   }
 
   const requestBody = {
@@ -128,107 +131,103 @@ CHỈ trả về duy nhất bản dịch tiếng Việt của câu mới, không
     ? [cachedWorkingModel, ...GEMINI_MODELS.filter(m => m !== cachedWorkingModel)]
     : GEMINI_MODELS;
 
-  let lastError = null;
-
-  for (const model of modelsToTry) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model
-}:generateContent`;
-
-    const timeoutCtrl = new AbortController();
-    const timer = setTimeout(() => timeoutCtrl.abort(), timeoutMs);
-    if (signal) {
-      if (signal.aborted) {
-        timeoutCtrl.abort();
-      } else {
-        signal.addEventListener('abort', () => timeoutCtrl.abort(), { once: true });
-      }
-    }
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': cleanKey
-        },
-        body: JSON.stringify(requestBody),
-        signal: timeoutCtrl.signal
-      });
-
-      if (!response.ok) {
-        let errJson = null;
-        let errMsg = '';
-        try {
-          errJson = await response.json();
-          errMsg = errJson?.error?.message || '';
-        } catch {
-          errMsg = await response.text().catch(() => '');
-        }
-
-        if (response.status === 404) {
-          lastError = new Error(`Gemini: Model ${model
-} không khả dụng.`);
-          continue;
-        }
-
-        if (response.status === 400 || response.status === 403) {
-          const lower = errMsg.toLowerCase();
-          if (lower.includes('api_key_invalid') || lower.includes('key not valid') || lower.includes('api key not valid') || lower.includes('forbidden')) {
-            throw new Error('Gemini: API Key không hợp lệ hoặc đã bị vô hiệu hóa.');
-          }
-          if (lower.includes('location is not supported') || lower.includes('unsupported location')) {
-            throw new Error('Gemini: Vùng địa lý hiện tại chưa được Google hỗ trợ (cần VPN).');
-          }
-          throw new Error(`Gemini: Yêu cầu bị từ chối (${response.status
-}: ${errMsg.slice(0, 90) || 'Lỗi tham số'
-})`);
-        }
-
-        if (response.status === 429) {
-          throw new Error('Gemini: Vượt hạn mức sử dụng (Quota / Rate limit 15 RPM). Vui lòng thử lại sau.');
-        }
-
-        throw new Error(`Gemini: Máy chủ báo mã ${response.status
-} (${errMsg.slice(0, 80) || 'Lỗi không xác định'
-})`);
-      }
-
-      const result = await response.json();
-      const candidatePart = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!candidatePart) {
-        const finishReason = result.candidates?.[0]?.finishReason;
-        if (finishReason === 'SAFETY') {
-          throw new Error('Gemini: Bản dịch bị bộ lọc an toàn của Google chặn.');
-        }
-        if (finishReason && finishReason !== 'STOP') {
-          throw new Error(`Gemini: Bản dịch bị ngắt quãng (${finishReason
-})`);
-        }
-        throw new Error('Gemini: Không nhận được nội dung bản dịch từ AI.');
-      }
-
-      cachedWorkingModel = model;
-      return candidatePart.trim().replace(/^["']|["']$/g, '');
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        if (signal && signal.aborted) {
-          throw err;
-        }
-        throw new Error(`Gemini: Quá thời gian chờ phản hồi (Timeout ${Math.round(timeoutMs/1000)
-}s).`);
-      }
-      lastError = err;
-
-      if (err.message.includes('API Key không hợp lệ') || err.message.includes('Vượt hạn mức') || err.message.includes('Timeout')) {
-        throw err;
-      }
-    } finally {
-      clearTimeout(timer);
+  const overallTimeoutCtrl = new AbortController();
+  const overallTimer = setTimeout(() => overallTimeoutCtrl.abort(), timeoutMs);
+  if (signal) {
+    if (signal.aborted) {
+      overallTimeoutCtrl.abort();
+    } else {
+      signal.addEventListener('abort', () => overallTimeoutCtrl.abort(), { once: true });
     }
   }
 
-  throw lastError || new Error('Không thể kết nối đến máy chủ Gemini.');
+  let lastError = null;
+
+  try {
+    for (const model of modelsToTry) {
+      if (overallTimeoutCtrl.signal.aborted) break;
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': cleanKey
+          },
+          body: JSON.stringify(requestBody),
+          signal: overallTimeoutCtrl.signal
+        });
+
+        if (!response.ok) {
+          let errJson = null;
+          let errMsg = '';
+          try {
+            errJson = await response.json();
+            errMsg = errJson?.error?.message || '';
+          } catch {
+            errMsg = await response.text().catch(() => '');
+          }
+
+          if (response.status === 404) {
+            lastError = new Error(`Gemini: Model ${model} không khả dụng.`);
+            continue;
+          }
+
+          if (response.status === 400 || response.status === 403) {
+            const lower = errMsg.toLowerCase();
+            if (lower.includes('api_key_invalid') || lower.includes('key not valid') || lower.includes('api key not valid') || lower.includes('forbidden')) {
+              throw new Error('Gemini: API Key không hợp lệ hoặc đã bị vô hiệu hóa.');
+            }
+            if (lower.includes('location is not supported') || lower.includes('unsupported location')) {
+              throw new Error('Gemini: Vùng địa lý hiện tại chưa được Google hỗ trợ (cần VPN).');
+            }
+            throw new Error(`Gemini: Yêu cầu bị từ chối (${response.status}: ${errMsg.slice(0, 90) || 'Lỗi tham số'})`);
+          }
+
+          if (response.status === 429) {
+            throw new Error('Gemini: Vượt hạn mức sử dụng (Quota / Rate limit 15 RPM). Vui lòng thử lại sau.');
+          }
+
+          throw new Error(`Gemini: Máy chủ báo mã ${response.status} (${errMsg.slice(0, 80) || 'Lỗi không xác định'})`);
+        }
+
+        const result = await response.json();
+        const candidatePart = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!candidatePart) {
+          const finishReason = result.candidates?.[0]?.finishReason;
+          if (finishReason === 'SAFETY') {
+            throw new Error('Gemini: Bản dịch bị bộ lọc an toàn của Google chặn.');
+          }
+          if (finishReason && finishReason !== 'STOP') {
+            throw new Error(`Gemini: Bản dịch bị ngắt quãng (${finishReason})`);
+          }
+          throw new Error('Gemini: Không nhận được nội dung bản dịch từ AI.');
+        }
+
+        cachedWorkingModel = model;
+        return candidatePart.trim().replace(/^["']|["']$/g, '');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          if (signal && signal.aborted) {
+            throw err;
+          }
+          throw new Error(`Gemini: Quá thời gian chờ phản hồi (Timeout ${Math.round(timeoutMs/1000)}s).`);
+        }
+        lastError = err;
+
+        if (err.message.includes('API Key không hợp lệ') || err.message.includes('Vượt hạn mức') || err.message.includes('Timeout')) {
+          throw err;
+        }
+      }
+    }
+
+    throw lastError || new Error('Không thể kết nối đến máy chủ Gemini.');
+  } finally {
+    clearTimeout(overallTimer);
+  }
 }
 
 export async function testGeminiConnection(apiKey) {

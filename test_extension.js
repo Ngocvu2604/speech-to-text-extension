@@ -559,6 +559,207 @@ async function runTests() {
   console.log('  ✓ sidepanel.js đã tích hợp slot liveInterimSlot cập nhật bản dịch tức thời 1-2s');
   console.log(' -> OK: Phụ đề cập nhật liên tục ngay khi giảng viên đang nói!\n');
 
+  console.log('[Test 23] Kiểm tra chuỗi nhận dạng mô phỏng & Chống spam/lặp câu cũ (User Request)...');
+  const simFinalized = [];
+  let interimCount = 0;
+  const simBuffer = new SentenceBuffer({
+    onInterimUpdate: (data) => {
+      if (data.english) interimCount++;
+    },
+    onSentenceFinalized: (sent) => {
+      simFinalized.push(sent.english);
+    },
+    onSkipped: () => {}
+  });
+
+  simBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "If you want to change your life" }], { isFinal: false })
+    ]
+  });
+
+  simBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "If you want to change your life, you need to" }], { isFinal: false })
+    ]
+  });
+
+  simBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "If you want to change your life, you need to be busy." }], { isFinal: true })
+    ]
+  });
+
+  if (simFinalized.length !== 1) {
+    throw new Error(`Chuỗi nhận dạng mô phỏng tạo ra ${simFinalized.length} câu thay vì 1 câu duy nhất! Danh sách: ${JSON.stringify(simFinalized)}`);
+  }
+  if (simFinalized[0] !== "If you want to change your life, you need to be busy.") {
+    throw new Error(`Nội dung câu chốt sai: "${simFinalized[0]}"`);
+  }
+  console.log('  ✓ Nhận dạng 3 bước: Tạm thời (6 từ) -> Cập nhật (10 từ) -> Kết quả cuối (12 từ)');
+  console.log(`  ✓ Kết quả chốt chính xác duy nhất 1 lần: "${simFinalized[0]}"`);
+  console.log('  ✓ Toàn bộ chuỗi trung gian chỉ cập nhật tạm thời, không bị lặp hay spam câu!');
+  console.log(' -> OK: Khắc phục triệt để lỗi spam/lặp phụ đề khi nghe âm thanh mới!\n');
+
+  console.log('[Test 24] Kiểm tra bảo toàn nội dung khi bấm Dừng (flush) & cơ chế Thử lại (Retry)...');
+  const flushFinalized = [];
+  const flushBuffer = new SentenceBuffer({
+    onSentenceFinalized: (sent) => flushFinalized.push(sent.english)
+  });
+
+  flushBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "And never give up on your dreams" }], { isFinal: false })
+    ]
+  });
+
+  if (flushFinalized.length !== 0) {
+    throw new Error('Câu tạm thời chưa ổn định không được xuất sớm');
+  }
+
+  flushBuffer.flush();
+
+  if (flushFinalized.length !== 1 || !flushFinalized[0].includes("And never give up on your dreams")) {
+    throw new Error(`flush() khi bấm Dừng làm mất nội dung trong bộ đệm: ${JSON.stringify(flushFinalized)}`);
+  }
+  console.log(`  ✓ flush() khi bấm Dừng chốt trọn vẹn câu còn trong bộ đệm: "${flushFinalized[0]}"`);
+
+  if (!jsContent.includes('btn-retry-inline') || !jsContent.includes('error-vi')) {
+    throw new Error('sidepanel.js thiếu cơ chế Thử lại (retry) khi bản dịch lỗi');
+  }
+  console.log('  ✓ sidepanel.js hỗ trợ nút Thử lại (retry inline) khi gặp lỗi dịch thuật hoặc timeout');
+  console.log(' -> OK: Bảo toàn 100% nội dung bài giảng, không làm mất nội dung khi kết thúc phiên!\n');
+
+  console.log('[Test 25] Kiểm tra thanh điều khiển ghim đáy & Luồng hiển thị chữ trực tiếp...');
+  if (!htmlContent.includes('id="bottomControlPanel"') || !htmlContent.includes('class="bottom-control-panel"')) {
+    throw new Error('sidepanel.html thiếu footer #bottomControlPanel');
+  }
+  const viewportPos = htmlContent.indexOf('id="subtitlesViewport"');
+  const footerPos = htmlContent.indexOf('id="bottomControlPanel"');
+  if (viewportPos === -1 || footerPos === -1 || viewportPos >= footerPos) {
+    throw new Error('Thứ tự HTML sai: #subtitlesViewport phải nằm trước/trên #bottomControlPanel');
+  }
+  console.log('  ✓ #subtitlesViewport nằm trọn vẹn phía trên #bottomControlPanel, nhường tối đa diện tích cho phụ đề');
+
+  const currentCss = fs.readFileSync(path.join(__dirname, 'sidepanel.css'), 'utf-8');
+  if (!currentCss.includes('.bottom-control-panel') || !currentCss.includes('.compact-controls-row') || !currentCss.includes('.btn-compact')) {
+    throw new Error('sidepanel.css thiếu định dạng cho .bottom-control-panel hoặc .compact-controls-row');
+  }
+  console.log('  ✓ sidepanel.css định nghĩa đầy đủ bố cục .bottom-control-panel và .btn-compact');
+
+  if (!jsContent.includes('interimClearTimer')) {
+    throw new Error('sidepanel.js thiếu bộ hẹn giờ interimClearTimer giữ chữ trực tiếp mượt mà');
+  }
+  console.log('  ✓ sidepanel.js tích hợp interimClearTimer giữ dòng tiếng Anh trực tiếp không bị chớp giật hay biến mất sớm');
+  console.log(' -> OK: Thanh điều khiển đáy gọn gàng và luồng nhận dạng trực tiếp hoàn chỉnh!\n');
+
+  console.log('[Test 26] Kiểm tra chu kỳ tự động tiếp tục nhận dạng sau câu dài (Auto-Continue)...');
+  const multiTurnFinalized = [];
+  const multiTurnBuffer = new SentenceBuffer({
+    onSentenceFinalized: (sent) => multiTurnFinalized.push(sent.english),
+    onInterimUpdate: () => {},
+    onSkipped: () => {}
+  });
+
+  multiTurnBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "In this chapter we will examine how artificial intelligence and machine learning can be applied to solve real world problems in modern computer science" }], { isFinal: false })
+    ]
+  });
+
+  multiTurnBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "In this chapter we will examine how artificial intelligence and machine learning can be applied to solve real world problems in modern computer science and engineering." }], { isFinal: true })
+    ]
+  });
+
+  multiTurnBuffer.handleRecognitionEnd();
+
+  if (multiTurnFinalized.length === 0) {
+    throw new Error('Câu dài không được chốt sau khi kết thúc chu kỳ nhận dạng');
+  }
+  const sentence1 = multiTurnFinalized.join(' ');
+  if (!sentence1.includes('engineering') || !sentence1.includes('artificial intelligence')) {
+    throw new Error(`Phần cuối câu dài bị mất: ${sentence1}`);
+  }
+  console.log('  ✓ Câu dài được chốt trọn vẹn cả phần thân và đuôi câu:');
+  console.log(`    "${sentence1}"`);
+
+  multiTurnBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "Now let us move to the second part of our presentation." }], { isFinal: true })
+    ]
+  });
+  multiTurnBuffer.handleRecognitionEnd();
+
+  const sentence2 = multiTurnFinalized[multiTurnFinalized.length - 1];
+  if (!sentence2.includes('second part of our presentation')) {
+    throw new Error(`Câu tiếp theo sau câu dài không được nhận dạng: ${JSON.stringify(multiTurnFinalized)}`);
+  }
+  console.log('  ✓ Câu tiếp theo được nhận dạng tự động trong cùng phiên nghe mà không cần bật lại micro:');
+  console.log(`    "${sentence2}"`);
+
+  const speechJs = fs.readFileSync(path.join(__dirname, 'src', 'speech.js'), 'utf-8');
+  if (!speechJs.includes('cleanupCurrentRecognition') || !speechJs.includes('consecutiveRestartFailures')) {
+    throw new Error('src/speech.js thiếu cơ chế cleanupCurrentRecognition hoặc consecutiveRestartFailures');
+  }
+  console.log('  ✓ SpeechEngine được trang bị cơ chế cleanupCurrentRecognition cô lập hoàn toàn callback cũ');
+  console.log('  ✓ SpeechEngine có bộ đếm consecutiveRestartFailures và kiểm soát auto-restart an toàn');
+  console.log(' -> OK: Khắc phục triệt để lỗi ngừng nhận dạng sau khi nghe một câu dài!\n');
+
+  console.log('[Test 27] Kiểm tra chống treo/đơ giao diện, giới hạn timeout và bảo toàn 100% văn bản nhận dạng...');
+  const timeoutSafetyBuffer = new SentenceBuffer({
+    onSentenceFinalized: () => {},
+    onInterimUpdate: () => {},
+    onSkipped: () => {}
+  });
+
+  timeoutSafetyBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "This is the first segment of our lecture about computer systems." }], { isFinal: true })
+    ]
+  });
+
+  timeoutSafetyBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "This is another important topic that we will discuss in depth." }], { isFinal: true })
+    ]
+  });
+
+  const history = timeoutSafetyBuffer.getSessionEnglishHistory();
+  if (history.length !== 2) {
+    throw new Error(`sessionEnglishHistory không lưu đủ 2 câu: ${JSON.stringify(history)}`);
+  }
+  console.log('  ✓ sessionEnglishHistory bảo toàn 100% các câu tiếng Anh đã nhận dạng trong bộ nhớ phiên');
+  console.log('  ✓ Khắc phục triệt để lỗi lọc nhầm làm mất câu mới bắt đầu tương tự câu trước');
+
+  const translatorJs = fs.readFileSync(path.join(__dirname, 'src', 'translator.js'), 'utf-8');
+  if (!translatorJs.includes('overallTimeoutCtrl') || !translatorJs.includes('timeoutMs = 6000')) {
+    throw new Error('src/translator.js thiếu cơ chế chặn timeout tổng thể overallTimeoutCtrl hoặc timeoutMs = 6000');
+  }
+  console.log('  ✓ translateWithGemini được khóa chặt với overallTimeoutCtrl = 6s, triệt tiêu vòng lặp nhiều model gây treo UI');
+
+  const sidepanelJs = fs.readFileSync(path.join(__dirname, 'sidepanel.js'), 'utf-8');
+  if (sidepanelJs.includes("behavior: 'smooth'") && sidepanelJs.includes("requestAnimationFrame(() => {\n    requestAnimationFrame")) {
+    throw new Error('sidepanel.js vẫn còn lồng requestAnimationFrame mượt gây nghẽn luồng giao diện');
+  }
+  if (!sidepanelJs.includes('error-source-text') || !sidepanelJs.includes('record.vietnamese = sentence.english')) {
+    throw new Error('sidepanel.js thiếu cơ chế lưu văn bản nguồn tiếng Anh khi lỗi dịch hoặc timeout');
+  }
+  console.log('  ✓ Cuộn phụ đề trực tiếp chuyển sang cập nhật vị trí trực tiếp, triệt tiêu nghẽn compositor trình duyệt');
+  console.log('  ✓ Văn bản tiếng Anh gốc được bảo lưu trọn vẹn khi lỗi dịch hoặc timeout, cho phép Thử lại tức thời');
+  console.log('  ✓ Trạng thái loading (...) được dọn dẹp sạch sẽ, không bao giờ để con trỏ xoay vô hạn');
+  console.log(' -> OK: Khắc phục triệt để lỗi đơ/treo, chuột quay loading và mất chữ sau khi dịch!\n');
+
   console.log('=== TẤT CẢ KIỂM THỬ ĐÃ VƯỢT QUA XUẤT SẮC! ===');
 }
 

@@ -17,10 +17,8 @@ let currentSessionId = 0;
 let recentTranslationContext = [];
 const MAX_CONTEXT_SENTENCES = 3;
 
-let liveInterimTimer = null;
-let liveInterimAbortCtrl = null;
 let currentLiveEnglish = '';
-let currentLiveVi = '';
+let interimClearTimer = null;
 
 let isUserAtBottom = true;
 const SCROLL_THRESHOLD = 60;
@@ -220,18 +218,18 @@ function scrollViewportToBottomIfAtBottom(force = false) {
   if (!autoScrollEnabled && !force) return;
 
   if (isUserAtBottom || force) {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const el = DOM.subtitlesViewport;
-        if (el) {
-          el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-          isUserAtBottom = true;
-          if (DOM.btnScrollToLatest) {
-            DOM.btnScrollToLatest.classList.add('hidden');
-          }
-        }
-      });
-    });
+    const el = DOM.subtitlesViewport;
+    if (el) {
+      if (force) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      } else {
+        el.scrollTop = el.scrollHeight;
+      }
+      isUserAtBottom = true;
+      if (DOM.btnScrollToLatest) {
+        DOM.btnScrollToLatest.classList.add('hidden');
+      }
+    }
   }
 }
 
@@ -410,42 +408,47 @@ async function toggleListeningSession() {
       }
     }
   } else {
-
     isSessionActive = false;
-    currentSessionId++;
-    if (activeSessionAbortController) {
-      activeSessionAbortController.abort();
-      activeSessionAbortController = null;
-    }
-
-    clearTimeout(liveInterimTimer);
-    if (liveInterimAbortCtrl) {
-      liveInterimAbortCtrl.abort();
-      liveInterimAbortCtrl = null;
-    }
-    const liveSlot = document.getElementById('liveInterimSlot');
-    if (liveSlot) liveSlot.remove();
-    currentLiveEnglish = '';
-    currentLiveVi = '';
-
-    translationQueue = [];
-    isTranslating = false;
     DOM.btnToggleListening.disabled = false;
     DOM.btnToggleListening.className = 'primary-btn btn-purple';
     DOM.btnText.textContent = 'Bắt đầu nghe';
 
-    if (sentenceBuffer) {
-      sentenceBuffer.flush();
-    }
     if (speechEngine) {
       speechEngine.stop();
     }
 
+    if (sentenceBuffer) {
+      sentenceBuffer.flush();
+    }
+
+    if (interimClearTimer) {
+      clearTimeout(interimClearTimer);
+      interimClearTimer = null;
+    }
     DOM.liveSpeakingIndicator.classList.add('hidden');
     DOM.liveSpeakingText.textContent = '';
-    if (DOM.queueStatusBadge) {
-      DOM.queueStatusBadge.classList.add('hidden');
-      DOM.queueStatusBadge.textContent = '';
+    const liveSlot = document.getElementById('liveInterimSlot');
+    if (liveSlot) liveSlot.remove();
+    currentLiveEnglish = '';
+
+    if (translationQueue.length > 0) {
+      processTranslationQueue();
+    } else {
+      if (DOM.queueStatusBadge) {
+        DOM.queueStatusBadge.classList.add('hidden');
+        DOM.queueStatusBadge.textContent = '';
+      }
+      const pendingLoadings = DOM.continuousTranscript?.querySelectorAll('.unit-vi.loading');
+      if (pendingLoadings && pendingLoadings.length > 0) {
+        pendingLoadings.forEach(el => {
+          const parent = el.closest('.transcript-unit');
+          const seq = parent ? parseInt(parent.dataset.seq) : NaN;
+          const unit = !isNaN(seq) ? transcriptUnits.find(u => u.seqIndex === seq) : null;
+          el.className = 'unit-vi error-vi';
+          const text = unit?.english || '';
+          el.innerHTML = text ? `[Chưa dịch: <span class="error-source-text">${escapeHtml(text)}</span> <button type="button" class="btn-retry-inline" data-seq="${seq}">Thử lại</button>]` : '';
+        });
+      }
     }
 
     if (transcriptUnits.length === 0 && DOM.emptyState) {
@@ -455,14 +458,23 @@ async function toggleListeningSession() {
 }
 
 function handleInterimUpdate(english, isEnglish) {
-  if (!isSessionActive || !english || !isEnglish) {
-    DOM.liveSpeakingIndicator.classList.add('hidden');
-    DOM.liveSpeakingText.textContent = '';
-    const liveSlot = document.getElementById('liveInterimSlot');
-    if (liveSlot && !currentLiveVi) {
-      liveSlot.remove();
+  if (!english || !isEnglish) {
+    if (!interimClearTimer) {
+      interimClearTimer = setTimeout(() => {
+        if (!isSessionActive) return;
+        DOM.liveSpeakingIndicator.classList.add('hidden');
+        DOM.liveSpeakingText.textContent = '';
+        const liveSlot = document.getElementById('liveInterimSlot');
+        if (liveSlot) liveSlot.remove();
+        interimClearTimer = null;
+      }, 1500);
     }
     return;
+  }
+
+  if (interimClearTimer) {
+    clearTimeout(interimClearTimer);
+    interimClearTimer = null;
   }
 
   if (DOM.emptyState) {
@@ -471,128 +483,63 @@ function handleInterimUpdate(english, isEnglish) {
 
   DOM.liveSpeakingIndicator.classList.remove('hidden');
   DOM.liveSpeakingText.textContent = english;
+  DOM.liveSpeakingIndicator.classList.add('live-streaming');
 
-  let liveSlot = document.getElementById('liveInterimSlot');
-  if (!liveSlot) {
-    liveSlot = document.createElement('span');
-    liveSlot.id = 'liveInterimSlot';
-    liveSlot.className = 'transcript-unit live-unit';
-    liveSlot.innerHTML = `
-      <span class="unit-en">(${escapeHtml(english)
-}) </span>
-      <span class="unit-vi live-streaming">${currentLiveVi ? escapeHtml(currentLiveVi) + '...' : '...'
-}</span>
-      <span class="unit-spacer"> </span>
-    `;
-    DOM.continuousTranscript.appendChild(liveSlot);
-  } else {
-    const enSpan = liveSlot.querySelector('.unit-en');
-    if (enSpan) enSpan.textContent = `(${escapeHtml(english)
-}) `;
-  }
+  const liveSlot = document.getElementById('liveInterimSlot');
+  if (liveSlot) liveSlot.remove();
 
   scrollViewportToBottomIfAtBottom();
-
-  const trimmed = english.trim();
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length < 2) return;
-
-  clearTimeout(liveInterimTimer);
-  liveInterimTimer = setTimeout(async () => {
-    if (!isSessionActive || !trimmed) return;
-    if (trimmed === currentLiveEnglish && currentLiveVi) return;
-
-    if (liveInterimAbortCtrl) {
-      liveInterimAbortCtrl.abort();
-    }
-    liveInterimAbortCtrl = new AbortController();
-
-    currentLiveEnglish = trimmed;
-    const activeKey = (appSettings.geminiApiKey || (DOM.inputGeminiKey ? DOM.inputGeminiKey.value.trim() : '')).trim().replace(/^["']|["']$/g, '');
-    const activeEngine = DOM.selectEngine?.value || appSettings.translationEngine || 'google-gtx';
-
-    try {
-      const res = await translateText(trimmed, {
-        engine: activeEngine,
-        geminiApiKey: activeKey,
-        context: recentTranslationContext.slice(-2).join(' '),
-        timeoutMs: 3500,
-        signal: liveInterimAbortCtrl.signal
-      });
-
-      if (!isSessionActive) return;
-
-      currentLiveVi = res.translatedText.trim();
-      const slot = document.getElementById('liveInterimSlot');
-      if (slot) {
-        const viSpan = slot.querySelector('.unit-vi');
-        if (viSpan) {
-          viSpan.textContent = currentLiveVi + '...';
-          viSpan.className = 'unit-vi live-streaming';
-        }
-        scrollViewportToBottomIfAtBottom();
-      }
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.warn('[NgheGiang-Diag][5.Translator] Live interim translation notice:', err.message);
-    }
-  }, 280);
 }
 
 async function handleSentenceFinalized(sentence) {
   if (!sentence.english) return;
 
-  clearTimeout(liveInterimTimer);
+  const normalizedEn = sentence.english.trim().toLowerCase();
+  const lastUnit = transcriptUnits[transcriptUnits.length - 1];
+  if (lastUnit && lastUnit.english.trim().toLowerCase() === normalizedEn) {
+    console.log('[NgheGiang] Suppressed duplicate sentence from entering transcript list.');
+    return;
+  }
+
+  const inQueue = translationQueue.some(item => item.sessionId === currentSessionId && item.sentence.english.trim().toLowerCase() === normalizedEn);
+  if (inQueue) {
+    console.log('[NgheGiang] Suppressed duplicate sentence from entering translation queue.');
+    return;
+  }
+
   if (DOM.emptyState) {
     DOM.emptyState.style.display = 'none';
   }
-  DOM.liveSpeakingIndicator.classList.add('hidden');
-  DOM.liveSpeakingText.textContent = '';
+  if (interimClearTimer) {
+    clearTimeout(interimClearTimer);
+  }
+  interimClearTimer = setTimeout(() => {
+    if (!isSessionActive) return;
+    DOM.liveSpeakingIndicator.classList.add('hidden');
+    DOM.liveSpeakingText.textContent = '';
+    const liveSlot = document.getElementById('liveInterimSlot');
+    if (liveSlot) liveSlot.remove();
+    interimClearTimer = null;
+  }, 1200);
 
   const seqIndex = nextSeqIndex++;
-  let unitEl = document.getElementById('liveInterimSlot');
-  let previewVi = '';
-
-  if (unitEl && currentLiveVi) {
-    previewVi = currentLiveVi;
-    unitEl.removeAttribute('id');
-    unitEl.id = `unit-${seqIndex
-}`;
-    unitEl.className = 'transcript-unit';
-    unitEl.dataset.seq = seqIndex;
-
-    const enSpan = unitEl.querySelector('.unit-en');
-    if (enSpan) enSpan.textContent = `(${escapeHtml(sentence.english)
-}) `;
-
-    const viSpan = unitEl.querySelector('.unit-vi');
-    if (viSpan) {
-      viSpan.className = 'unit-vi';
-      viSpan.textContent = previewVi;
-    }
-  } else {
-    if (unitEl) unitEl.remove();
-    unitEl = document.createElement('span');
-    unitEl.className = 'transcript-unit';
-    unitEl.id = `unit-${seqIndex
-}`;
-    unitEl.dataset.seq = seqIndex;
-    unitEl.innerHTML = `
-      <span class="unit-en">(${escapeHtml(sentence.english)
-}) </span>
-      <span class="unit-vi loading">...</span>
-      <span class="unit-spacer"> </span>
-    `;
-    DOM.continuousTranscript.appendChild(unitEl);
-  }
+  const unitEl = document.createElement('span');
+  unitEl.className = 'transcript-unit';
+  unitEl.id = `unit-${seqIndex}`;
+  unitEl.dataset.seq = seqIndex;
+  unitEl.innerHTML = `
+    <span class="unit-en">(${escapeHtml(sentence.english)}) </span>
+    <span class="unit-vi loading">...</span>
+    <span class="unit-spacer"> </span>
+  `;
+  DOM.continuousTranscript.appendChild(unitEl);
 
   currentLiveEnglish = '';
-  currentLiveVi = '';
 
   const unitRecord = {
     seqIndex,
     english: sentence.english,
-    vietnamese: previewVi,
+    vietnamese: '',
     timestamp: sentence.timestamp
   };
   transcriptUnits.push(unitRecord);
@@ -602,7 +549,7 @@ async function handleSentenceFinalized(sentence) {
     sentence,
     seqIndex,
     sessionId: currentSessionId,
-    previewVi
+    retryCount: 0
   });
 
   updateQueueStatusIndicator();
@@ -617,10 +564,9 @@ async function processTranslationQueue() {
   updateQueueStatusIndicator();
 
   try {
-    while (translationQueue.length > 0 && isSessionActive) {
-      if (translationQueue.length > 25) {
-        console.warn(`[NgheGiang] Hàng đợi dịch đang dồn ${translationQueue.length
-} câu, đang tăng tốc xử lý...`);
+    while (translationQueue.length > 0) {
+      if (translationQueue.length > 15) {
+        console.warn(`[NgheGiang] Translation backlog: ${translationQueue.length} items`);
       }
 
       const item = translationQueue.shift();
@@ -628,11 +574,11 @@ async function processTranslationQueue() {
 
       const { sentence, seqIndex, sessionId } = item;
 
-      if (!isSessionActive || sessionId !== currentSessionId) {
+      if (sessionId !== currentSessionId && !transcriptUnits.some(u => u.seqIndex === seqIndex)) {
         continue;
       }
 
-      const contextText = recentTranslationContext.join(' ');
+      const contextText = recentTranslationContext.slice(-2).join(' ');
       const startTime = performance.now();
       let translatedVietnamese = '';
 
@@ -645,42 +591,49 @@ async function processTranslationQueue() {
           engine: activeEngine,
           geminiApiKey: activeGeminiKey,
           context: contextText,
-          timeoutMs: 8500,
+          timeoutMs: 6500,
           signal: activeSessionAbortController?.signal
         });
         translatedVietnamese = res.translatedText;
         const elapsedMs = Math.round(performance.now() - startTime);
-        console.log(`[NgheGiang-Diag][5.Translator] Success seq=${seqIndex
-} in ${elapsedMs
-}ms: engine=${res.engineUsed
-}`);
 
         recentTranslationContext.push(sentence.english);
         if (recentTranslationContext.length > MAX_CONTEXT_SENTENCES) {
           recentTranslationContext.shift();
         }
       } catch (err) {
-        if (!isSessionActive || sessionId !== currentSessionId) {
-          break;
-        }
-
-        console.warn(`[NgheGiang-Diag][5.Translator] Failed seq=${seqIndex
-}:`, err.message);
+        console.warn(`[NgheGiang-Diag][5.Translator] Failed seq=${seqIndex}:`, err.message);
 
         const retryCount = item.retryCount || 0;
         const isTransientError = err.message.includes('fetch') || err.message.includes('network') || err.message.includes('429') || err.message.includes('Timeout');
-        if (retryCount < 2 && isTransientError && isSessionActive && sessionId === currentSessionId) {
+        if (retryCount < 1 && isTransientError && sessionId === currentSessionId) {
           item.retryCount = retryCount + 1;
-          console.log(`[NgheGiang-Diag][5.Translator] Đang thử lại câu seq=${seqIndex
-} (${item.retryCount
-}/2)...`);
-          await new Promise(r => setTimeout(r, 600 * item.retryCount));
+          await new Promise(r => setTimeout(r, 800));
+          if (sessionId !== currentSessionId && !transcriptUnits.some(u => u.seqIndex === seqIndex)) break;
           translationQueue.unshift(item);
           continue;
         }
 
-        translatedVietnamese = `(${err.message
-})`;
+        const record = transcriptUnits.find(u => u.seqIndex === seqIndex);
+        if (record) {
+          record.translateError = true;
+          record.errorMessage = err.message;
+          if (!record.vietnamese) {
+            record.vietnamese = sentence.english;
+          }
+        }
+
+        const targetUnit = document.getElementById(`unit-${seqIndex}`);
+        if (targetUnit) {
+          const viEl = targetUnit.querySelector('.unit-vi');
+          if (viEl) {
+            viEl.className = 'unit-vi error-vi';
+            viEl.innerHTML = `[Chưa dịch: <span class="error-source-text">${escapeHtml(sentence.english)}</span> <button type="button" class="btn-retry-inline" data-seq="${seqIndex}">Thử lại</button>]`;
+          }
+        }
+
+        showSkippedNotification(`Lỗi dịch: ${err.message}. Bấm 'Thử lại' để dịch lại câu này.`);
+        continue;
       }
 
       let formattedVi = translatedVietnamese.trim();
@@ -702,13 +655,27 @@ async function processTranslationQueue() {
         formattedVi = formattedVi.replace(/\.{2,}/g, '.').replace(/,\./g, '.');
       }
 
+      if (formattedVi.length > 0 && transcriptUnits.length > 1) {
+        const prevUnit = transcriptUnits.find(u => u.seqIndex === seqIndex - 1);
+        if (prevUnit && prevUnit.vietnamese && prevUnit.vietnamese.length >= 8) {
+          const prevViTrim = prevUnit.vietnamese.trim();
+          if (formattedVi.startsWith(prevViTrim) && formattedVi.length > prevViTrim.length) {
+            formattedVi = formattedVi.slice(prevViTrim.length).trim().replace(/^[,;:.—–]+\s*/, '');
+            if (formattedVi.length > 0) {
+              formattedVi = formattedVi.charAt(0).toUpperCase() + formattedVi.slice(1);
+            }
+          }
+        }
+      }
+
       const record = transcriptUnits.find(u => u.seqIndex === seqIndex);
       if (record) {
         record.vietnamese = formattedVi;
+        record.translateError = false;
+        record.errorMessage = '';
       }
 
-      const targetUnit = document.getElementById(`unit-${seqIndex
-}`);
+      const targetUnit = document.getElementById(`unit-${seqIndex}`);
       if (targetUnit) {
         const viEl = targetUnit.querySelector('.unit-vi');
         if (viEl) {
@@ -728,6 +695,19 @@ async function processTranslationQueue() {
   } finally {
     isTranslating = false;
     updateQueueStatusIndicator();
+    if (!isSessionActive && translationQueue.length === 0) {
+      const pendingLoadings = DOM.continuousTranscript?.querySelectorAll('.unit-vi.loading');
+      if (pendingLoadings && pendingLoadings.length > 0) {
+        pendingLoadings.forEach(el => {
+          const parent = el.closest('.transcript-unit');
+          const seq = parent ? parseInt(parent.dataset.seq) : NaN;
+          const unit = !isNaN(seq) ? transcriptUnits.find(u => u.seqIndex === seq) : null;
+          el.className = 'unit-vi error-vi';
+          const text = unit?.english || '';
+          el.innerHTML = text ? `[Chưa dịch: <span class="error-source-text">${escapeHtml(text)}</span> <button type="button" class="btn-retry-inline" data-seq="${seq}">Thử lại</button>]` : '';
+        });
+      }
+    }
   }
 }
 
@@ -785,15 +765,9 @@ function clearAllSubtitles() {
   if (transcriptUnits.length === 0) return;
 
   if (confirm('Bạn có chắc muốn xóa toàn bộ nội dung phụ đề bài giảng trong phiên hiện tại không?')) {
-    clearTimeout(liveInterimTimer);
-    if (liveInterimAbortCtrl) {
-      liveInterimAbortCtrl.abort();
-      liveInterimAbortCtrl = null;
-    }
     const liveSlot = document.getElementById('liveInterimSlot');
     if (liveSlot) liveSlot.remove();
     currentLiveEnglish = '';
-    currentLiveVi = '';
 
     transcriptUnits = [];
     translationQueue = [];
@@ -1066,6 +1040,36 @@ function bindEvents() {
   DOM.btnClear.addEventListener('click', clearAllSubtitles);
 
   DOM.btnExport.addEventListener('click', exportSubtitlesToText);
+
+  if (DOM.continuousTranscript) {
+    DOM.continuousTranscript.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-retry-inline');
+      if (!btn) return;
+      const seq = parseInt(btn.dataset.seq);
+      if (isNaN(seq)) return;
+
+      const unit = transcriptUnits.find(u => u.seqIndex === seq);
+      if (!unit) return;
+
+      const targetUnit = document.getElementById(`unit-${seq}`);
+      if (targetUnit) {
+        const viEl = targetUnit.querySelector('.unit-vi');
+        if (viEl) {
+          viEl.className = 'unit-vi loading';
+          viEl.textContent = '... (Đang dịch lại)';
+        }
+      }
+
+      translationQueue.push({
+        sentence: { english: unit.english, timestamp: unit.timestamp },
+        seqIndex: seq,
+        sessionId: currentSessionId,
+        retryCount: 0
+      });
+      updateQueueStatusIndicator();
+      processTranslationQueue();
+    });
+  }
 
   DOM.btnHeaderPopout.addEventListener('click', () => {
     if (chrome && chrome.runtime && chrome.runtime.sendMessage) {

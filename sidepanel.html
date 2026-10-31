@@ -29,16 +29,8 @@
         <span class="switch-slider"></span>
       </label>
 
-      <!-- Nút chuyển giao diện Sáng / Tối -->
       <button id="btnThemeToggle" class="header-icon-btn" title="Chuyển sang Giao diện Tối" aria-label="Giao diện Tối">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-      </button>
-
-      <button id="btnThemeToggle" class="header-icon-btn" title="Chuyển sang Giao diện Tối" aria-label="Giao diện Tối">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-          stroke-linejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
       </button>
@@ -71,67 +63,28 @@
 
   <div class="tab-pane active" id="paneSubtitles">
 
-    <section class="control-box">
-
-      <button id="btnToggleListening" class="primary-btn btn-purple">
-        <svg class="btn-mic-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-          <path
-            d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-        </svg>
-        <span class="btn-text">Bắt đầu nghe</span>
-      </button>
-
-      <div class="vu-meter" title="Mức âm thanh thu từ micro">
-        <div class="vu-bar" id="vuBar"></div>
+    <div class="permission-banner hidden" id="permissionBanner">
+      <div class="banner-content">
+        <span class="banner-icon">⚠️</span>
+        <span class="banner-text">Cần cấp quyền micro cho tiện ích để bắt đầu nghe.</span>
       </div>
+      <button id="btnRequestPermission" class="btn-banner-action">Cấp quyền Micro</button>
+    </div>
 
-      <div class="permission-banner hidden" id="permissionBanner">
-        <div class="banner-content">
-          <span class="banner-icon">⚠️</span>
-          <span class="banner-text">Cần cấp quyền micro cho tiện ích để bắt đầu nghe.</span>
-        </div>
-        <button id="btnRequestPermission" class="btn-banner-action">Cấp quyền Micro</button>
-      </div>
-
-      <div class="network-notice-banner hidden" id="networkNoticeBanner">
-        <div class="banner-content">
-          <span class="banner-icon">🌐</span>
-          <div class="banner-text-group">
-            <strong id="networkNoticeTitle">Thông báo nhận dạng giọng nói</strong>
-            <span id="networkNoticeDesc">Dịch vụ nhận dạng giọng nói cần kết nối internet.</span>
-            <div id="networkNoticeActions" class="banner-actions-row hidden" style="margin-top: 4px;">
-              <button id="btnSwitchToGeminiSTT" class="btn-banner-action">Dùng Gemini Audio (Hỗ trợ Brave)</button>
-              <button id="btnRetryWebSpeech" class="btn-banner-outline">Thử lại</button>
-            </div>
+    <div class="network-notice-banner hidden" id="networkNoticeBanner">
+      <div class="banner-content">
+        <span class="banner-icon">🌐</span>
+        <div class="banner-text-group">
+          <strong id="networkNoticeTitle">Thông báo nhận dạng giọng nói</strong>
+          <span id="networkNoticeDesc">Dịch vụ nhận dạng giọng nói cần kết nối internet.</span>
+          <div id="networkNoticeActions" class="banner-actions-row hidden" style="margin-top: 4px;">
+            <button id="btnSwitchToGeminiSTT" class="btn-banner-action">Dùng Gemini Audio (Hỗ trợ Brave)</button>
+            <button id="btnRetryWebSpeech" class="btn-banner-outline">Thử lại</button>
           </div>
         </div>
-        <button id="btnDismissNetworkNotice" class="btn-banner-close" title="Đóng">✕</button>
       </div>
-
-      <div class="options-row">
-        <div class="device-select-box" title="Chọn thiết bị micro">
-          <svg class="mic-glyph" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-            <path
-              d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-          </svg>
-          <select id="selectMicDevice" class="device-select">
-            <option value="">Micro mặc định</option>
-          </select>
-        </div>
-
-        <label class="toggle-en-box" title="Hiển thị tiếng Anh gốc kèm theo bản dịch tiếng Việt">
-          <input type="checkbox" id="checkShowEnglish">
-          <span>Hiện tiếng Anh</span>
-        </label>
-
-        <div class="font-size-group" title="Cỡ chữ">
-          <button id="btnFontDec" class="font-btn" title="Giảm cỡ chữ">A-</button>
-          <button id="btnFontInc" class="font-btn" title="Tăng cỡ chữ">A+</button>
-        </div>
-      </div>
-    </section>
+      <button id="btnDismissNetworkNotice" class="btn-banner-close" title="Đóng">✕</button>
+    </div>
 
     <main class="subtitles-viewport" id="subtitlesViewport">
 
@@ -168,31 +121,69 @@
       </svg>
     </button>
 
-    <footer class="bottom-action-bar" id="bottomActionBar">
-      <button id="btnCopyAll" class="bottom-action-btn" title="Sao chép toàn bộ văn bản dịch" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-        </svg>
-        <span>Sao chép</span>
-      </button>
+    <footer class="bottom-control-panel" id="bottomControlPanel">
+      <div class="vu-meter" title="Mức âm thanh thu từ micro">
+        <div class="vu-bar" id="vuBar"></div>
+      </div>
 
-      <button id="btnExport" class="bottom-action-btn" title="Xuất toàn bộ phụ đề ra file (.txt)" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        <span>Xuất file</span>
-      </button>
+      <div class="compact-controls-row">
+        <button id="btnToggleListening" class="primary-btn btn-purple btn-compact">
+          <svg class="btn-mic-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+            <path
+              d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+          </svg>
+          <span class="btn-text">Bắt đầu nghe</span>
+        </button>
 
-      <button id="btnClear" class="bottom-action-btn btn-clear-danger" title="Xóa toàn bộ phụ đề phiên này" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-        <span>Xóa</span>
-      </button>
+        <div class="device-select-box" title="Chọn thiết bị micro">
+          <svg class="mic-glyph" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+            <path
+              d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+          </svg>
+          <select id="selectMicDevice" class="device-select">
+            <option value="">Micro mặc định</option>
+          </select>
+        </div>
+
+        <label class="toggle-en-box" title="Hiển thị tiếng Anh gốc kèm theo bản dịch tiếng Việt">
+          <input type="checkbox" id="checkShowEnglish">
+          <span>Hiện tiếng Anh</span>
+        </label>
+
+        <div class="font-size-group" title="Cỡ chữ">
+          <button id="btnFontDec" class="font-btn" title="Giảm cỡ chữ">A-</button>
+          <button id="btnFontInc" class="font-btn" title="Tăng cỡ chữ">A+</button>
+        </div>
+      </div>
+
+      <div class="bottom-action-bar" id="bottomActionBar">
+        <button id="btnCopyAll" class="bottom-action-btn" title="Sao chép toàn bộ văn bản dịch" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span>Sao chép</span>
+        </button>
+
+        <button id="btnExport" class="bottom-action-btn" title="Xuất toàn bộ phụ đề ra file (.txt)" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Xuất file</span>
+        </button>
+
+        <button id="btnClear" class="bottom-action-btn btn-clear-danger" title="Xóa toàn bộ phụ đề phiên này" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          <span>Xóa</span>
+        </button>
+      </div>
     </footer>
   </div>
 

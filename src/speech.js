@@ -58,9 +58,28 @@ export class SpeechEngine {
     this.language = 'en-US';
     this.engineType = options.engineType || 'web-speech';
     this.consecutiveNetworkErrors = 0;
+    this.isRecognitionActive = false;
+    this.consecutiveRestartFailures = 0;
 
     this.audioChunkQueue = [];
     this.isProcessingAudioQueue = false;
+  }
+
+  cleanupCurrentRecognition() {
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    if (this.recognition) {
+      const rec = this.recognition;
+      this.recognition = null;
+      rec.onstart = null;
+      rec.onresult = null;
+      rec.onerror = null;
+      rec.onend = null;
+      try {
+        rec.abort();
+      } catch (e) {}
+    }
+    this.isRecognitionActive = false;
   }
 
   static openPermissionTab() {
@@ -85,9 +104,10 @@ export class SpeechEngine {
     recognition.lang = this.language;
 
     recognition.onstart = () => {
+      this.isRecognitionActive = true;
+      this.consecutiveRestartFailures = 0;
       this.consecutiveNetworkErrors = 0;
-      console.log(`[NgheGiang-Diag][2.SpeechRecog] SpeechRecognition started. Lang: ${this.language
-}`);
+      console.log(`[NgheGiang-Diag][2.SpeechRecog] SpeechRecognition started. Lang: ${this.language}`);
       if (this.isListeningRequested) {
         this.onStateChange(SPEECH_STATES.LISTENING, 'Đang nghe giảng viên (tiếng Anh)...');
       }
@@ -95,26 +115,26 @@ export class SpeechEngine {
 
     recognition.onresult = (event) => {
       this.consecutiveNetworkErrors = 0;
+      this.consecutiveRestartFailures = 0;
       if (this.isListeningRequested) {
-        console.log(`[NgheGiang-Diag][2.SpeechRecog] Result received. Results: ${event.results.length
-}, resultIndex: ${event.resultIndex
-}`);
+        console.log(`[NgheGiang-Diag][2.SpeechRecog] Result received. Results: ${event.results.length}, resultIndex: ${event.resultIndex}`);
         this.onResult(event);
       }
     };
 
     recognition.onerror = async (event) => {
+      const errType = event.error || '';
 
-      if (event.error === 'no-speech') {
+      if (errType === 'no-speech' || errType === 'aborted') {
         return;
       }
 
-      console.warn(`[NgheGiang-Diag][2.SpeechRecog] Recognition notice: ${event.error
-}`);
+      console.warn(`[NgheGiang-Diag][2.SpeechRecog] Recognition notice: ${errType}`);
 
-      if (event.error === 'not-allowed') {
+      if (errType === 'not-allowed') {
         this.isListeningRequested = false;
         this.stopAudioCapture();
+        this.cleanupCurrentRecognition();
         this.onStateChange(
           SPEECH_STATES.PERMISSION_DENIED,
           'Quyền micro bị từ chối hoặc chưa được cấp cho tiện ích.'
@@ -122,37 +142,57 @@ export class SpeechEngine {
         return;
       }
 
-      if (event.error === 'audio-capture') {
-        this.isListeningRequested = false;
-        this.stopAudioCapture();
-        this.onStateChange(
-          SPEECH_STATES.ERROR,
-          'Không tìm thấy micro hoặc micro đang bị ứng dụng khác chiếm quyền.'
-        );
+      if (errType === 'audio-capture') {
+        this.consecutiveRestartFailures = (this.consecutiveRestartFailures || 0) + 1;
+        if (this.consecutiveRestartFailures >= 3) {
+          this.isListeningRequested = false;
+          this.stopAudioCapture();
+          this.cleanupCurrentRecognition();
+          this.onStateChange(
+            SPEECH_STATES.ERROR,
+            'Không tìm thấy micro hoặc micro đang bị ứng dụng khác chiếm quyền.'
+          );
+        } else if (this.isListeningRequested) {
+          this.scheduleAutoRestart(500);
+        }
         return;
       }
 
-      if (event.error === 'network') {
+      if (errType === 'network') {
         this.consecutiveNetworkErrors = (this.consecutiveNetworkErrors || 0) + 1;
-        this.isListeningRequested = false;
-        this.stopAudioCapture();
-        clearTimeout(this.reconnectTimer);
-
         const isBrave = await isBraveBrowser();
 
-        let message = 'Lỗi kết nối máy chủ nhận dạng Web Speech.';
         if (isBrave) {
-          message = 'Trình duyệt Brave không kết nối được tới máy chủ nhận dạng Web Speech của Google. Bạn có thể chuyển sang chế độ "Google Gemini Audio STT" trong Cài đặt (miễn phí) để nghe trên Brave.';
-        } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          this.isListeningRequested = false;
+          this.stopAudioCapture();
+          this.cleanupCurrentRecognition();
+          const message = 'Trình duyệt Brave không kết nối được tới máy chủ nhận dạng Web Speech của Google. Bạn có thể chuyển sang chế độ "Google Gemini Audio STT" trong Cài đặt (miễn phí) để nghe trên Brave.';
+          this.onStateChange(SPEECH_STATES.NETWORK_ERROR, message);
+          this.onError({ type: 'network', isBrave: true, message });
+          return;
+        }
+
+        if (this.consecutiveNetworkErrors < 3 && this.isListeningRequested) {
+          console.warn(`[NgheGiang-Diag][2.SpeechRecog] Tạm mất kết nối Web Speech (${this.consecutiveNetworkErrors}/3). Tự động kết nối lại...`);
+          this.scheduleAutoRestart(400);
+          return;
+        }
+
+        this.isListeningRequested = false;
+        this.stopAudioCapture();
+        this.cleanupCurrentRecognition();
+
+        let message = 'Lỗi kết nối máy chủ nhận dạng Web Speech.';
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
           message = 'Không có kết nối Internet. Vui lòng kiểm tra lại đường truyền mạng.';
         } else {
-          message = 'Không thể kết nối máy chủ nhận dạng Web Speech. Vui lòng thử lại hoặc đổi sang Google Gemini Audio STT.';
+          message = 'Không thể kết nối máy chủ nhận dạng Web Speech sau nhiều lần thử. Vui lòng thử lại hoặc đổi sang Google Gemini Audio STT.';
         }
 
         this.onStateChange(SPEECH_STATES.NETWORK_ERROR, message);
         this.onError({
           type: 'network',
-          isBrave,
+          isBrave: false,
           isOffline: typeof navigator !== 'undefined' ? !navigator.onLine : false,
           consecutiveErrors: this.consecutiveNetworkErrors,
           message
@@ -162,38 +202,47 @@ export class SpeechEngine {
     };
 
     recognition.onend = () => {
+      this.isRecognitionActive = false;
 
       if (this.onRecognitionEnd) {
         try { this.onRecognitionEnd(); } catch (e) {}
       }
 
       if (this.isListeningRequested) {
-        this.scheduleAutoRestart();
+        this.scheduleAutoRestart(200);
       }
     };
 
     return recognition;
   }
 
-  scheduleAutoRestart(delay = 80) {
-    clearTimeout(this.reconnectTimer);
+  scheduleAutoRestart(delay = 200) {
     if (!this.isListeningRequested) return;
 
+    clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       if (!this.isListeningRequested) return;
+
+      this.cleanupCurrentRecognition();
+
       try {
-        if (this.recognition) {
-          try { this.recognition.abort(); } catch (e) {}
-        }
         this.recognition = this.createRecognitionInstance();
         this.recognition.start();
+        this.consecutiveRestartFailures = 0;
       } catch (err) {
+        console.warn('[NgheGiang-Diag][2.SpeechRecog] Auto-restart attempt error:', err.message);
+        this.consecutiveRestartFailures = (this.consecutiveRestartFailures || 0) + 1;
 
-        setTimeout(() => {
-          if (this.isListeningRequested) {
-            this.scheduleAutoRestart(Math.max(delay * 2, 1000));
+        if (this.isListeningRequested) {
+          if (this.consecutiveRestartFailures < 5) {
+            const nextDelay = Math.min(300 * Math.pow(1.5, this.consecutiveRestartFailures), 3000);
+            this.scheduleAutoRestart(nextDelay);
+          } else {
+            console.error('[NgheGiang-Diag][2.SpeechRecog] Consecutive restart failures exceeded limit.');
+            this.onStateChange(SPEECH_STATES.ERROR, 'Nhận dạng giọng nói tạm gián đoạn. Bấm Thử lại để tiếp tục.');
           }
-        }, 300);
+        }
       }
     }, delay);
   }
@@ -574,15 +623,23 @@ export class SpeechEngine {
 
     return new Promise((resolve, reject) => {
       let startupResolved = false;
+      const timeoutTimer = setTimeout(() => {
+        if (!startupResolved) {
+          startupResolved = true;
+          this.isListeningRequested = true;
+          resolve();
+        }
+      }, 3500);
 
       try {
-        if (this.recognition) {
-          try { this.recognition.abort(); } catch (e) {}
-        }
+        this.cleanupCurrentRecognition();
+        this.consecutiveRestartFailures = 0;
+        this.consecutiveNetworkErrors = 0;
         this.recognition = this.createRecognitionInstance();
 
         const origOnStart = this.recognition.onstart;
         this.recognition.onstart = () => {
+          clearTimeout(timeoutTimer);
           if (!startupResolved) {
             startupResolved = true;
             this.isListeningRequested = true;
@@ -594,6 +651,7 @@ export class SpeechEngine {
         const origOnError = this.recognition.onerror;
         this.recognition.onerror = async (event) => {
           if (!startupResolved && event.error !== 'no-speech') {
+            clearTimeout(timeoutTimer);
             startupResolved = true;
             this.isListeningRequested = false;
             this.stopAudioCapture();
@@ -629,7 +687,7 @@ export class SpeechEngine {
 
   stop() {
     this.isListeningRequested = false;
-    clearTimeout(this.reconnectTimer);
+    this.consecutiveRestartFailures = 0;
 
     this.audioChunkQueue = [];
     this.isProcessingAudioQueue = false;
@@ -641,13 +699,7 @@ export class SpeechEngine {
       this.mediaRecorder = null;
     }
 
-    if (this.recognition) {
-      try {
-        this.recognition.stop();
-        this.recognition.abort();
-      } catch (e) {}
-      this.recognition = null;
-    }
+    this.cleanupCurrentRecognition();
 
     this.stopAudioCapture();
     this.onStateChange(SPEECH_STATES.STOPPED, 'Đã dừng nghe. Micro đã tắt.');
