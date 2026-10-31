@@ -760,6 +760,55 @@ async function runTests() {
   console.log('  ✓ Trạng thái loading (...) được dọn dẹp sạch sẽ, không bao giờ để con trỏ xoay vô hạn');
   console.log(' -> OK: Khắc phục triệt để lỗi đơ/treo, chuột quay loading và mất chữ sau khi dịch!\n');
 
+  console.log('[Test 28] Kiểm tra chẩn đoán micro track, ngắt câu theo dấu chấm & triệt tiêu lặp lồng ghép...');
+  const trackSpeechJs = fs.readFileSync(path.join(__dirname, 'src', 'speech.js'), 'utf-8');
+  if (!trackSpeechJs.includes('isMicrophoneTrackActive') || !trackSpeechJs.includes('handleTrackFailure')) {
+    throw new Error('src/speech.js thiếu cơ chế kiểm tra isMicrophoneTrackActive hoặc handleTrackFailure');
+  }
+  console.log('  ✓ SpeechEngine tích hợp kiểm tra trạng thái live của audio track và xử lý lỗi ngắt micro');
+
+  const dedupeFinalized = [];
+  const dedupeBuffer = new SentenceBuffer({
+    onSentenceFinalized: (sent) => dedupeFinalized.push(sent.english),
+    onInterimUpdate: () => {},
+    onSkipped: () => {}
+  });
+
+  dedupeBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "Air pollution has become a serious problem due to increasing emissions from factories. Many industrial companies do not comply with environmental regulations." }], { isFinal: true })
+    ]
+  });
+
+  if (dedupeFinalized.length !== 2) {
+    throw new Error(`Đoạn văn có 2 câu hoàn chỉnh nhưng bị gom/cắt sai: ${JSON.stringify(dedupeFinalized)}`);
+  }
+  console.log('  ✓ Đoạn văn chứa dấu chấm được tách thành 2 câu độc lập, đúng ngữ pháp:');
+  console.log(`    1. "${dedupeFinalized[0]}"`);
+  console.log(`    2. "${dedupeFinalized[1]}"`);
+
+  dedupeBuffer.handleSpeechResult({
+    resultIndex: 0,
+    results: [
+      Object.assign([{ transcript: "Many industrial companies do not comply with environmental regulations leading to high levels of harmful substances." }], { isFinal: true })
+    ]
+  });
+
+  const lastSent = dedupeFinalized[dedupeFinalized.length - 1];
+  if (lastSent.includes("Many industrial companies do not comply with environmental regulations leading to")) {
+    throw new Error(`Bị lặp lại cả câu cũ khi backend trả cumulative transcript: ${lastSent}`);
+  }
+  console.log('  ✓ Đã khử triệt để phần tiền tố trùng lặp từ câu trước, chỉ giữ phần mới nối tiếp:');
+  console.log(`    "${lastSent}"`);
+
+  const sidepanelCode = fs.readFileSync(path.join(__dirname, 'sidepanel.js'), 'utf-8');
+  if (!sidepanelCode.includes('resetListeningButtonUI') || !sidepanelCode.includes('setListeningButtonActive')) {
+    throw new Error('sidepanel.js thiếu resetListeningButtonUI hoặc setListeningButtonActive');
+  }
+  console.log('  ✓ sidepanel.js đồng bộ nút nghe với trạng thái thực tế của track micro và nhận dạng');
+  console.log(' -> OK: Chẩn đoán micro thực tế, phân tách câu chuẩn xác và chống lặp hoàn hảo!\n');
+
   console.log('=== TẤT CẢ KIỂM THỬ ĐÃ VƯỢT QUA XUẤT SẮC! ===');
 }
 

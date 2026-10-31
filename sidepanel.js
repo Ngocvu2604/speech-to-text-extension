@@ -278,11 +278,23 @@ function initEngines() {
     onStateChange: (state, message) => {
       if (state === SPEECH_STATES.PERMISSION_DENIED) {
         DOM.permissionBanner.classList.remove('hidden');
+        resetListeningButtonUI();
       } else if (state === SPEECH_STATES.LISTENING) {
         DOM.permissionBanner.classList.add('hidden');
         DOM.networkNoticeBanner.classList.add('hidden');
+        setListeningButtonActive();
       } else if (state === SPEECH_STATES.NETWORK_ERROR) {
         handleNetworkErrorState(message);
+        resetListeningButtonUI();
+      } else if (state === SPEECH_STATES.ERROR) {
+        showSkippedNotification(message || 'Lỗi nhận dạng giọng nói');
+        resetListeningButtonUI();
+      } else if (state === SPEECH_STATES.STOPPED) {
+        resetListeningButtonUI();
+      } else if (state === SPEECH_STATES.PAUSED_SILENCE) {
+        if (DOM.liveSpeakingText) {
+          DOM.liveSpeakingText.textContent = '(Micro ngắt tiếng / Tạm dừng...)';
+        }
       }
     },
     onVolumeChange: (level) => {
@@ -336,6 +348,48 @@ async function refreshMicrophoneList() {
   });
 }
 
+function resetListeningButtonUI() {
+  isSessionActive = false;
+  if (DOM.btnToggleListening) {
+    DOM.btnToggleListening.disabled = false;
+    DOM.btnToggleListening.className = 'primary-btn btn-purple btn-compact';
+  }
+  if (DOM.btnText) {
+    DOM.btnText.textContent = 'Bắt đầu nghe';
+  }
+  if (DOM.liveSpeakingIndicator) {
+    DOM.liveSpeakingIndicator.classList.add('hidden');
+  }
+  if (DOM.liveSpeakingText) {
+    DOM.liveSpeakingText.textContent = '';
+  }
+}
+
+function setListeningButtonActive() {
+  isSessionActive = true;
+  if (DOM.btnToggleListening) {
+    DOM.btnToggleListening.disabled = false;
+    DOM.btnToggleListening.className = 'primary-btn btn-red btn-compact';
+  }
+  if (DOM.btnText) {
+    DOM.btnText.textContent = 'Dừng nghe (Tắt Micro)';
+  }
+}
+
+function cleanupPendingLoadings() {
+  const pendingLoadings = DOM.continuousTranscript?.querySelectorAll('.unit-vi.loading');
+  if (pendingLoadings && pendingLoadings.length > 0) {
+    pendingLoadings.forEach(el => {
+      const parent = el.closest('.transcript-unit');
+      const seq = parent ? parseInt(parent.dataset.seq) : NaN;
+      const unit = !isNaN(seq) ? transcriptUnits.find(u => u.seqIndex === seq) : null;
+      el.className = 'unit-vi error-vi';
+      const text = unit?.english || '';
+      el.innerHTML = text ? `[Chưa dịch: <span class="error-source-text">${escapeHtml(text)}</span> <button type="button" class="btn-retry-inline" data-seq="${seq}">Thử lại</button>]` : '';
+    });
+  }
+}
+
 async function toggleListeningSession() {
   if (!isSessionActive) {
     try {
@@ -354,8 +408,7 @@ async function toggleListeningSession() {
       const currentEngine = DOM.selectEngine?.value || appSettings.translationEngine;
       const currentGeminiKey = (appSettings.geminiApiKey || (DOM.inputGeminiKey ? DOM.inputGeminiKey.value.trim() : '')).trim().replace(/^["']|["']$/g, '');
       if (currentEngine === 'gemini' && !currentGeminiKey) {
-        DOM.btnToggleListening.disabled = false;
-        DOM.btnText.textContent = 'Bắt đầu nghe';
+        resetListeningButtonUI();
         switchTab('settings');
         alert('Bạn đang chọn công cụ dịch Google Gemini AI nhưng chưa nhập API Key. Vui lòng dán khóa miễn phí từ Google AI Studio vào ô cài đặt.');
         return;
@@ -366,6 +419,9 @@ async function toggleListeningSession() {
       recentTranslationContext = [];
       isUserAtBottom = true;
       activeSessionAbortController = new AbortController();
+      if (sentenceBuffer) {
+        sentenceBuffer.reset();
+      }
 
       await speechEngine.start({
         deviceId: deviceId,
@@ -374,11 +430,7 @@ async function toggleListeningSession() {
         geminiApiKey: currentGeminiKey
       });
 
-      isSessionActive = true;
-      DOM.btnToggleListening.disabled = false;
-      DOM.btnToggleListening.className = 'primary-btn btn-red';
-      DOM.btnText.textContent = 'Dừng nghe (Tắt Micro)';
-
+      setListeningButtonActive();
       await refreshMicrophoneList();
     } catch (err) {
       console.warn('[NgheGiang-Diag][2.SpeechRecog] Startup aborted:', err.message || err.type);
@@ -387,9 +439,7 @@ async function toggleListeningSession() {
         activeSessionAbortController.abort();
         activeSessionAbortController = null;
       }
-      DOM.btnToggleListening.disabled = false;
-      DOM.btnToggleListening.className = 'primary-btn btn-purple';
-      DOM.btnText.textContent = 'Bắt đầu nghe';
+      resetListeningButtonUI();
 
       if (transcriptUnits.length === 0 && DOM.emptyState) {
         DOM.emptyState.style.display = 'flex';
@@ -408,10 +458,7 @@ async function toggleListeningSession() {
       }
     }
   } else {
-    isSessionActive = false;
-    DOM.btnToggleListening.disabled = false;
-    DOM.btnToggleListening.className = 'primary-btn btn-purple';
-    DOM.btnText.textContent = 'Bắt đầu nghe';
+    resetListeningButtonUI();
 
     if (speechEngine) {
       speechEngine.stop();
@@ -438,17 +485,7 @@ async function toggleListeningSession() {
         DOM.queueStatusBadge.classList.add('hidden');
         DOM.queueStatusBadge.textContent = '';
       }
-      const pendingLoadings = DOM.continuousTranscript?.querySelectorAll('.unit-vi.loading');
-      if (pendingLoadings && pendingLoadings.length > 0) {
-        pendingLoadings.forEach(el => {
-          const parent = el.closest('.transcript-unit');
-          const seq = parent ? parseInt(parent.dataset.seq) : NaN;
-          const unit = !isNaN(seq) ? transcriptUnits.find(u => u.seqIndex === seq) : null;
-          el.className = 'unit-vi error-vi';
-          const text = unit?.english || '';
-          el.innerHTML = text ? `[Chưa dịch: <span class="error-source-text">${escapeHtml(text)}</span> <button type="button" class="btn-retry-inline" data-seq="${seq}">Thử lại</button>]` : '';
-        });
-      }
+      cleanupPendingLoadings();
     }
 
     if (transcriptUnits.length === 0 && DOM.emptyState) {
@@ -494,16 +531,33 @@ function handleInterimUpdate(english, isEnglish) {
 async function handleSentenceFinalized(sentence) {
   if (!sentence.english) return;
 
-  const normalizedEn = sentence.english.trim().toLowerCase();
-  const lastUnit = transcriptUnits[transcriptUnits.length - 1];
-  if (lastUnit && lastUnit.english.trim().toLowerCase() === normalizedEn) {
-    console.log('[NgheGiang] Suppressed duplicate sentence from entering transcript list.');
+  const cleanEn = sentence.english.trim();
+  const cleanTokens = cleanEn.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const normalizedEn = cleanTokens.join(' ');
+  if (!normalizedEn) return;
+
+  const isDuplicate = transcriptUnits.slice(-10).some(u => {
+    const uNorm = u.english.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).join(' ');
+    if (uNorm === normalizedEn) return true;
+    if (uNorm.length > 25 && normalizedEn.length > 25) {
+      if (uNorm.includes(normalizedEn) || normalizedEn.includes(uNorm)) return true;
+    }
+    return false;
+  });
+
+  if (isDuplicate) {
+    console.log('[NgheGiang] Suppressed duplicate sentence from entering transcript list:', cleanEn);
     return;
   }
 
-  const inQueue = translationQueue.some(item => item.sessionId === currentSessionId && item.sentence.english.trim().toLowerCase() === normalizedEn);
+  const inQueue = translationQueue.some(item => {
+    if (item.sessionId !== currentSessionId) return false;
+    const qNorm = item.sentence.english.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).join(' ');
+    return qNorm === normalizedEn;
+  });
+
   if (inQueue) {
-    console.log('[NgheGiang] Suppressed duplicate sentence from entering translation queue.');
+    console.log('[NgheGiang] Suppressed duplicate sentence from entering translation queue:', cleanEn);
     return;
   }
 

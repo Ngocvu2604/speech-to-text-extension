@@ -209,7 +209,11 @@ export class SpeechEngine {
       }
 
       if (this.isListeningRequested) {
-        this.scheduleAutoRestart(200);
+        if (!this.isMicrophoneTrackActive()) {
+          this.handleTrackFailure('Microphone track đã ngừng hoạt động.');
+        } else {
+          this.scheduleAutoRestart(200);
+        }
       }
     };
 
@@ -235,12 +239,18 @@ export class SpeechEngine {
         this.consecutiveRestartFailures = (this.consecutiveRestartFailures || 0) + 1;
 
         if (this.isListeningRequested) {
-          if (this.consecutiveRestartFailures < 5) {
+          if (this.consecutiveRestartFailures < 4) {
             const nextDelay = Math.min(300 * Math.pow(1.5, this.consecutiveRestartFailures), 3000);
             this.scheduleAutoRestart(nextDelay);
           } else {
             console.error('[NgheGiang-Diag][2.SpeechRecog] Consecutive restart failures exceeded limit.');
-            this.onStateChange(SPEECH_STATES.ERROR, 'Nhận dạng giọng nói tạm gián đoạn. Bấm Thử lại để tiếp tục.');
+            this.isListeningRequested = false;
+            this.stopAudioCapture();
+            this.cleanupCurrentRecognition();
+            this.onStateChange(SPEECH_STATES.ERROR, 'Dịch vụ nhận dạng giọng nói tạm gián đoạn sau nhiều lần thử. Vui lòng bấm Bắt đầu nghe để thử lại.');
+            if (this.onError) {
+              this.onError({ type: 'restart_limit', message: 'Nhận dạng giọng nói gián đoạn.' });
+            }
           }
         }
       }
@@ -266,6 +276,23 @@ export class SpeechEngine {
     }
   }
 
+  isMicrophoneTrackActive() {
+    if (!this.mediaStream) return false;
+    const tracks = this.mediaStream.getAudioTracks();
+    return tracks.length > 0 && tracks.some(t => t.readyState === 'live' && t.enabled);
+  }
+
+  handleTrackFailure(message) {
+    console.warn('[NgheGiang-Diag][1.AudioCapture] Track failure:', message);
+    this.isListeningRequested = false;
+    this.stopAudioCapture();
+    this.cleanupCurrentRecognition();
+    this.onStateChange(SPEECH_STATES.ERROR, message);
+    if (this.onError) {
+      this.onError({ type: 'track_ended', message });
+    }
+  }
+
   async startAudioCapture(deviceId = '') {
     this.stopAudioCapture();
 
@@ -285,9 +312,32 @@ export class SpeechEngine {
 
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log(`[NgheGiang-Diag][1.AudioCapture] Micro stream acquired. DeviceId: ${deviceId || 'default'
-}, Tracks: ${this.mediaStream.getAudioTracks().length
-}`);
+      const audioTracks = this.mediaStream.getAudioTracks();
+      if (!audioTracks || audioTracks.length === 0) {
+        throw new Error('NO_AUDIO_TRACK');
+      }
+
+      const primaryTrack = audioTracks[0];
+      primaryTrack.onended = () => {
+        console.warn('[NgheGiang-Diag][1.AudioCapture] Audio track ended unexpectedly.');
+        if (this.isListeningRequested) {
+          this.handleTrackFailure('Microphone đã bị ngắt kết nối hoặc bị ứng dụng khác đóng.');
+        }
+      };
+      primaryTrack.onmute = () => {
+        console.warn('[NgheGiang-Diag][1.AudioCapture] Audio track muted.');
+        if (this.isListeningRequested) {
+          this.onStateChange(SPEECH_STATES.PAUSED_SILENCE, 'Micro bị ngắt tiếng (Muted)...');
+        }
+      };
+      primaryTrack.onunmute = () => {
+        console.log('[NgheGiang-Diag][1.AudioCapture] Audio track unmuted.');
+        if (this.isListeningRequested && this.isRecognitionActive) {
+          this.onStateChange(SPEECH_STATES.LISTENING, 'Đang nghe giảng viên (tiếng Anh)...');
+        }
+      };
+
+      console.log(`[NgheGiang-Diag][1.AudioCapture] Micro stream acquired. DeviceId: ${deviceId || 'default'}, Tracks: ${audioTracks.length}`);
 
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
@@ -360,6 +410,9 @@ export class SpeechEngine {
 
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => {
+        track.onended = null;
+        track.onmute = null;
+        track.onunmute = null;
         try {
           track.stop();
         } catch (e) {}
